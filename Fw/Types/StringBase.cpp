@@ -24,7 +24,7 @@ StringBase::StringBase() {}
 StringBase::~StringBase() {}
 
 const CHAR* StringBase::operator+=(const CHAR* src) {
-    this->appendBuff(src, StringUtils::string_length(src, this->getCapacity()));
+    this->appendBuff(src, static_cast<SizeType>(StringUtils::string_length(src, this->getCapacity())));
     return this->toChar();
 }
 
@@ -53,16 +53,45 @@ bool StringBase::operator==(const CHAR* other) const {
     return (result == 0);
 }
 
-void StringBase::format(const CHAR* formatString, ...) {
-    CHAR* us = const_cast<CHAR*>(this->toChar());
-    SizeType cap = this->getCapacity();
-    FW_ASSERT(us);
+FormatStatus StringBase::format(const CHAR* formatString, ...) {
     va_list args;
     va_start(args, formatString);
-    (void)vsnprintf(us, cap, formatString, args);
+    FormatStatus status = this->vformat(formatString, args);
     va_end(args);
-    // null terminate
+    return status;
+}
+
+FormatStatus StringBase::vformat(const CHAR* formatString, va_list args) {
+    CHAR* us = const_cast<CHAR*>(this->toChar());
+    SizeType cap = this->getCapacity();
+    FW_ASSERT(us != nullptr);
+
+    // Check format string
+    if (formatString == nullptr) {
+        return FormatStatus::INVALID_FORMAT_STRING;
+    }
+    FwSizeType total_needed_size = 0;
+#if FW_USE_PRINTF_FAMILY_FUNCTIONS_IN_STRING_FORMATTING
+    // Check that the API size type fits in fprime size type
+    static_assert(std::numeric_limits<FwSizeType>::max() >= std::numeric_limits<PlatformIntType>::max(),
+            "Range of PlatformIntType does not fit within range of FwSizeType");
+    PlatformIntType total_needed_size_api = vsnprintf(us, cap, formatString, args);
+    // Check for error return, or a type overflow
+    if (total_needed_size_api < 0) {
+        return FormatStatus::OTHER_ERROR;
+    }
+    total_needed_size = static_cast<FwSizeType>(total_needed_size_api);
+#else
+    total_needed_size = StringUtils::string_length(format_string, cap);
+    *this = formatString;
+#endif
+    // Force null terminate
     us[cap - 1] = 0;
+    // Check for overflow
+    if (total_needed_size >= cap) {
+        return FormatStatus::OVERFLOWED;
+    }
+    return FormatStatus::SUCCESS;
 }
 
 bool StringBase::operator!=(const StringBase& other) const {

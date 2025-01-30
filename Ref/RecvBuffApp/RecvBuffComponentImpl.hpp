@@ -11,7 +11,6 @@ namespace Ref {
             // Only called by derived class
             RecvBuffImpl(const char* compName);
 
-            void init(NATIVE_INT_TYPE instanceId = 0);
             ~RecvBuffImpl();
 
         private:
@@ -24,7 +23,6 @@ namespace Ref {
             U32 m_errBuffs; // !< number of buffers with errors received
             F32 m_sensor1;
             F32 m_sensor2;
-            void toString(char* str, I32 buffer_size);
 
             // parameter update notification
             void parameterUpdated(FwPrmIdType id);

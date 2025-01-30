@@ -4,9 +4,6 @@
 #include <Os/TaskString.hpp>
 #include <cstdio>
 
-//#define DEBUG_PRINT(...) printf(##__VA_ARGS__); fflush(stdout)
-#define DEBUG_PRINT(...)
-
 namespace Fw {
 
     class ActiveComponentExitSerializableBuffer : public Fw::SerializeBufferBase {
@@ -35,7 +32,6 @@ namespace Fw {
     }
 
     ActiveComponentBase::~ActiveComponentBase() {
-        DEBUG_PRINT("ActiveComponent %s destructor.\n",this->getObjName());
     }
 
     void ActiveComponentBase::init(NATIVE_INT_TYPE instance) {
@@ -59,8 +55,8 @@ namespace Fw {
 #if FW_OBJECT_NAMES == 1
         taskName = this->getObjName();
 #else
-        char taskNameChar[FW_TASK_NAME_MAX_SIZE];
-        (void)snprintf(taskNameChar,sizeof(taskNameChar),"ActComp_%d",Os::Task::getNumTasks());
+        char taskNameChar[FW_TASK_NAME_BUFFER_SIZE];
+        (void)snprintf(taskNameChar,sizeof(taskNameChar),"ActComp_%" PRI_FwSizeType,Os::Task::getNumTasks());
         taskName = taskNameChar;
 #endif
         // Cooperative threads tasks externalize the task loop, and as such use the state machine as their task function
@@ -75,12 +71,10 @@ namespace Fw {
         ActiveComponentExitSerializableBuffer exitBuff;
         SerializeStatus stat = exitBuff.serialize(static_cast<I32>(ACTIVE_COMPONENT_EXIT));
         FW_ASSERT(FW_SERIALIZE_OK == stat,static_cast<NATIVE_INT_TYPE>(stat));
-        (void)this->m_queue.send(exitBuff,0,Os::Queue::QUEUE_NONBLOCKING);
-        DEBUG_PRINT("exit %s\n", this->getObjName());
+        (void)this->m_queue.send(exitBuff,0,Os::Queue::BlockingType::NONBLOCKING);
     }
 
     Os::Task::Status ActiveComponentBase::join() {
-        DEBUG_PRINT("join %s\n", this->getObjName());
         return this->m_task.join();
     }
 
@@ -137,7 +131,7 @@ namespace Fw {
 
     ActiveComponentBase::MsgDispatchStatus ActiveComponentBase::dispatch() {
         // Cooperative tasks should return rather than block when no messages are available
-        if (this->m_task.isCooperative() and m_queue.getNumMsgs() == 0) {
+        if (this->m_task.isCooperative() and m_queue.getMessagesAvailable() == 0) {
             return MsgDispatchStatus::MSG_DISPATCH_EMPTY;
         }
        return this->doDispatch();
